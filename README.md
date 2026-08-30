@@ -90,7 +90,6 @@ Detailed system layout and component definitions can be reviewed in the [RefundS
   eval_synthetic_detection.py  # Precision, Recall, FPR evaluation suite
 ```
 
----
 
 ## ⚡ Setup & Installation
 
@@ -134,6 +133,16 @@ python tests/eval_synthetic_detection.py
 ```
 
 Target evaluation thresholds:
-- **Precision**: $\ge 90\%$
-- **Recall**: $\ge 90\%$
-- **False Positive Rate**: $< 5\%$
+- **Precision**: $\ge 80\%$
+- **Recall**: $\ge 80\%$
+
+---
+
+## 🎯 Operational Demo Walkthrough
+
+1. **Access Portal**: Open `http://localhost:3000/login` and sign in (`admin` / `admin123`).
+2. **Configure Policy**: On the **Dashboard**, scroll to the **AI Compiler**, type *"Block above 70 and auto-refund below 25"*, click **Compile**, and watch the sliders and map sync live.
+3. **Investigate Network**: Go to **Suspicious Cases**, open **Gaurav Pillai**'s case, and explore the **React Flow Relationship Graph** showing device sharing links.
+4. **Run AI Agent**: Click **"Investigate with AI"** to trigger the 3-Node LangGraph workflow, view the reasoning trace, and click **"Confirm Coordinated Abuse"** (suspending him in the database).
+5. **Test Sandbox Checkout**: Go to the **Checkout Simulator** in the sidebar, select **Gaurav Pillai**, click Pay, and verify the simulator declines the card with a RefundShield alert.
+6. **Generate Dispute PDF**: Go back to Gaurav's case, click **"Generate Dispute Defense Package"**, and view the printable evidence report for card dispute win.

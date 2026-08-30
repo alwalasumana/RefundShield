@@ -30,8 +30,8 @@ class TestRefundShieldDetection(unittest.TestCase):
         """Test detection of Planted Network 1 (Shared Device Ring)"""
         state = {
             "case_id": "TEST-NET1",
-            "primary_customer_id": "CUST-NET1-001",
-            "customer_ids": ["CUST-NET1-001"],
+            "primary_customer_id": "cust_NET1_001",
+            "customer_ids": ["cust_NET1_001"],
             "suspicious_signals": [],
             "connected_entities": [],
             "evidence": [],
@@ -58,8 +58,8 @@ class TestRefundShieldDetection(unittest.TestCase):
         """Test false-positive avoidance on legitimate family sharing device/address"""
         state = {
             "case_id": "TEST-LEGIT",
-            "primary_customer_id": "CUST-LEGIT-FAM1",
-            "customer_ids": ["CUST-LEGIT-FAM1"],
+            "primary_customer_id": "cust_LEGIT_FAM1",
+            "customer_ids": ["cust_LEGIT_FAM1"],
             "suspicious_signals": [],
             "connected_entities": [],
             "evidence": [],
@@ -81,8 +81,8 @@ class TestRefundShieldDetection(unittest.TestCase):
 
     def test_03_benchmark_metrics(self):
         """Calculate Precision, Recall, F1, and FPR over synthetic database"""
-        true_abuse_ids = ["CUST-NET1-001", "CUST-NET1-002", "CUST-NET2-001", "CUST-NET2-002", "CUST-NET3-001", "CUST-NET4-001", "CUST-NET5-001"]
-        legit_ids = ["CUST-LEGIT-FAM1", "CUST-LEGIT-FAM2"]
+        true_abuse_ids = ["cust_NET1_001", "cust_NET1_002", "cust_NET2_001", "cust_NET2_002", "cust_NET3_001", "cust_NET4_001", "cust_NET5_001"]
+        legit_ids = ["cust_LEGIT_FAM1", "cust_LEGIT_FAM2"]
 
         tp, fp, tn, fn = 0, 0, 0, 0
 
