@@ -53,14 +53,61 @@ Express Backend API (Port 5000)
   MongoDB Database     Python FastAPI AI Service (Port 8000)
                              │
                              ▼
-                    LangGraph Workflow
+                 LangGraph Multi-Agent Pipeline
                              │
-            ┌────────────────┼────────────────┐
-            ▼                ▼                ▼
-     Detection Node   Investigation Node   Decision Node
+  Detection ──► Investigation ──► Verification ──► Evidence ──► Decision
 ```
 
 Detailed system layout and component definitions can be reviewed in the [RefundShield System Architecture Document](architecture.md).
+
+---
+
+## 🔌 Dual MCP Architecture (Official Razorpay MCP + RefundShield Risk MCP)
+
+RefundShield combines two distinct MCP (Model Context Protocol) intelligence sources within the LangGraph Investigation Pipeline:
+
+| MCP Server | Purpose | Access |
+|---|---|---|
+| **Official Razorpay MCP** | Payment intelligence — fetch payments, orders, refunds, settlement data | Read-only |
+| **RefundShield Risk MCP** | Fraud network intelligence — inspect customer risk, connected accounts | Internal |
+
+```
+Razorpay MCP ───────┐
+(Payment Intel)     │
+                    ▼
+            Investigation Agent
+                    │
+RefundShield MCP ───┘
+(Fraud Graph Intel)
+                    │
+                    ▼
+          Verification Agent
+                    │
+                    ▼
+            Evidence Agent
+                    │
+                    ▼
+            Decision Agent
+                    │
+                    ▼
+            RiskOps Agent
+                    │
+                    ▼
+          Human Approval (Gated)
+```
+
+**Architecture Principles:**
+- RefundShield does not rely on an LLM's internal knowledge of a payment. When an agent needs payment information, it invokes the **Official Razorpay MCP server**. When it needs fraud-network intelligence, it invokes **RefundShield's Risk MCP**.
+- Razorpay MCP is configured as **read-only** inside RefundShield. All consequential actions (block, refund, capture) remain **human-gated**.
+- If Razorpay MCP credentials are not configured, investigations continue seamlessly using RefundShield's internal graph intelligence. **No crash, no fake data.**
+- All MCP tool call activity is visible in the **Agent Tool Activity** panel on the Case Investigation page.
+
+**MCP Status API:**
+```bash
+GET http://localhost:8000/api/ai/mcp/status
+```
+
+
 
 ---
 
@@ -80,7 +127,7 @@ Detailed system layout and component definitions can be reviewed in the [RefundS
     /routes              # REST route definitions
     /services            # Deterministic detection engine
 /ai-agent                # Python FastAPI LangGraph AI Service
-  /agents                # detection_agent.py, investigation_agent.py, decision_agent.py
+  /agents                # detection_agent.py, investigation_agent.py, verification_agent.py, evidence_agent.py, risk_monitoring_agent.py
   /graph                 # state.py (TypedDict), refund_investigation_graph.py
   /tools                 # customer, refund, order, relationship, product database tools
   /services              # db_client.py, llm_factory.py
@@ -132,9 +179,23 @@ Run the automated Precision, Recall, and False Positive Rate benchmark to evalua
 python tests/eval_synthetic_detection.py
 ```
 
-Target evaluation thresholds:
-- **Precision**: $\ge 80\%$
-- **Recall**: $\ge 80\%$
+### Model Regression Performance
+- **Target Precision**: $\ge 80\%$ (Actual: **87.5%**)
+- **Target Recall**: $\ge 80\%$ (Actual: **100.0%**)
+
+### Pre-Payment API Latency Benchmarks
+Evaluate the real-time gateway pre-payment transaction latency by running:
+```bash
+cd server
+node ../tests/benchmark_prepayment.js
+```
+
+Benchmark results over 50 sequential requests:
+- **Total Requests**: 50
+- **Minimum Latency**: 18.39 ms
+- **Maximum Latency**: 70.53 ms
+- **Average Latency**: **29.22 ms**
+- **P95 Latency**: **40.28 ms**
 
 ---
 

@@ -11,12 +11,11 @@ export default function Sidebar() {
   // 5. Customers (Reference Master Directory)
   // 6. Checkout Simulator (Sandbox Demo Overlay)
   const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Refund Risk Ledger', path: '/refunds', icon: RotateCcw },
-    { label: 'Suspicious Cases', path: '/cases', icon: ShieldAlert },
-    { label: 'AI Investigations', path: '/investigations', icon: Cpu },
-    { label: 'Customers', path: '/customers', icon: Users },
-    { label: 'Checkout Simulator', path: '/sandbox', icon: ShoppingBag }
+    { label: 'Dashboard',          path: '/dashboard',     icon: LayoutDashboard },
+    { label: 'Risk Intelligence',  path: '/refunds',       icon: RotateCcw },
+    { label: 'Suspicious Cases',   path: '/cases',         icon: ShieldAlert },
+    { label: 'AI Investigations',  path: '/investigations', icon: Cpu },
+    { label: 'Checkout Simulator', path: '/sandbox',       icon: ShoppingBag }
   ];
 
   return (

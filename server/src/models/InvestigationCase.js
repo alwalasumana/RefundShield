@@ -57,11 +57,16 @@ const investigationCaseSchema = new mongoose.Schema({
   networkSummary: { type: mongoose.Schema.Types.Mixed },
   scoreBreakdown: [scoreBreakdownSchema],
   beforeAfterComparison: { type: mongoose.Schema.Types.Mixed },
+  verificationResult: { type: mongoose.Schema.Types.Mixed },
+  evidencePackage: { type: mongoose.Schema.Types.Mixed },
   executionSteps: [executionStepSchema],
   aiMode: { type: String, default: 'DEMO_FALLBACK' },
   reviewerNotes: { type: String, default: '' },
   reviewedBy: { type: String },
-  reviewedAt: { type: Date }
+  reviewedAt: { type: Date },
+  // Razorpay MCP fields — populated by the Investigation Agent when MCP is connected
+  razorpayContext: { type: mongoose.Schema.Types.Mixed, default: null },
+  mcpToolCalls:   { type: [mongoose.Schema.Types.Mixed], default: [] },
 }, { timestamps: true });
 
 investigationCaseSchema.index({ caseId: 1 });

@@ -1,38 +1,38 @@
 import time
 from graph.state import InvestigationState
+from services.llm_factory import get_llm, get_ai_mode
 
 def decision_node(state: InvestigationState) -> InvestigationState:
     """
-    LangGraph Node 3: Decision Node
-    Evaluates evidence strength, builds transparent score breakdown matrix, 
-    assigns confidence percentage, recommended action (VERIFY/REVIEW/BLOCK), 
-    and human review requirement.
+    LangGraph Node 5: Decision Node
+    Evaluates outputs from Detection, Investigation, Verification, and Evidence agents
+    to determine the final Risk Score, Recommended Action, Confidence, and human review status.
     """
     start_time = time.time()
     risk_score = state.get("risk_score", state.get("risk_score_after", 70))
     evidence = state.get("evidence", [])
-    signals = state.get("suspicious_signals", [])
+    verification_res = state.get("verification_result", {})
+    evidence_pkg = state.get("evidence_package", {})
 
+    # Compute baseline confidence
     confidence = 0.85
+    if verification_res:
+        confidence = verification_res.get("confidence", 0.85)
+    
     if len(evidence) >= 3 or risk_score >= 80:
-        confidence = 0.94
+        confidence = max(confidence, 0.94)
     elif len(evidence) == 0:
-        confidence = 0.60
+        confidence = min(confidence, 0.60)
 
-    strong_evidence_types = {"SHARED_DEVICE", "SHARED_ADDRESS", "CONNECTED_SUSPICIOUS_CUSTOMERS", "SUSPICIOUS_TIMING"}
-    strong_evidence_count = len([e for e in evidence if e.get("type") in strong_evidence_types])
-
-    if risk_score >= 85 and confidence >= 0.80 and strong_evidence_count >= 2:
+    # Determine recommended action using verification and risk metrics
+    recommended_action = "REVIEW"
+    if verification_res.get("recommendation") == "BLOCK" or (risk_score >= 85 and confidence >= 0.85):
         recommended_action = "BLOCK"
         human_review_required = True
-    elif risk_score >= 45:
-        recommended_action = "REVIEW"
-        human_review_required = True
-    else:
+    elif verification_res.get("recommendation") == "VERIFY" or (risk_score < 45 and confidence >= 0.75):
         recommended_action = "VERIFY"
         human_review_required = False
-
-    if confidence < 0.70:
+    else:
         recommended_action = "REVIEW"
         human_review_required = True
 
@@ -65,6 +65,23 @@ def decision_node(state: InvestigationState) -> InvestigationState:
             "contribution": min(20, risk_score - base_calc)
         })
 
+    # Optional Gemini decision reasoning
+    ai_mode = get_ai_mode()
+    final_summary = state.get("summary", "")
+    if ai_mode == "LLM":
+        llm = get_llm()
+        prompt = f"""You are the final risk decision agent. Review all previous findings:
+Risk Score: {risk_score}
+Verification Recommendation: {verification_res.get("recommendation")}
+Evidence Summary: {evidence_pkg.get("caseSummary")}
+Write a concise 2-sentence executive summary stating the recommended action ({recommended_action}) and key justification based ONLY on this evidence.
+"""
+        try:
+            response = llm.invoke(prompt)
+            final_summary = getattr(response, "content", str(response)).strip()
+        except Exception:
+            pass
+
     step_info = {
         "node": "DecisionNode",
         "status": "COMPLETED",
@@ -82,6 +99,16 @@ def decision_node(state: InvestigationState) -> InvestigationState:
     state["human_review_required"] = human_review_required
     state["score_breakdown"] = score_breakdown
     state["execution_steps"] = exec_steps
+    state["summary"] = final_summary
     state["investigation_status"] = "COMPLETED"
+
+    # Also set final_decision field
+    state["final_decision"] = {
+        "action": recommended_action,
+        "riskScore": risk_score,
+        "riskLevel": final_risk_level,
+        "confidence": confidence,
+        "summary": final_summary
+    }
 
     return state

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, Cpu, IndianRupee, Network, RefreshCw, ShieldAlert, TrendingUp, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Cpu, IndianRupee, Network, RefreshCw, ShieldAlert, TrendingUp, Loader2, Zap, ShieldCheck } from 'lucide-react';
 import {
   Area,
   AreaChart,

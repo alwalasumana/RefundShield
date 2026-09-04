@@ -25,3 +25,14 @@ class InvestigationState(TypedDict):
     before_after_comparison: Dict[str, Any]
     ai_mode: str
     execution_steps: List[Dict[str, Any]]
+    detected_connections: List[Dict[str, Any]]
+    investigation_findings: Dict[str, Any]
+    verification_result: Dict[str, Any]
+    evidence_package: Dict[str, Any]
+    monitoring_signals: List[Dict[str, Any]]
+    agent_timings: Dict[str, float]
+    final_decision: Dict[str, Any]
+    # Razorpay MCP fields (optional – safe default: {}, [])
+    razorpay_context: Dict[str, Any]
+    mcp_tool_calls: List[Dict[str, Any]]
+

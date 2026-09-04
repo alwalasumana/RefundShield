@@ -148,7 +148,8 @@ export async function getDashboardStats(req, res) {
       riskDistribution,
       refundTrends,
       topSuspiciousNetworks,
-      recentCases: topSuspiciousNetworks
+      recentCases: topSuspiciousNetworks,
+      prepaymentLatency: global.getPrepaymentLatencyStats()
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

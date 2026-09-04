@@ -9,16 +9,22 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from graph.refund_investigation_graph import investigation_graph
 from graph.state import InvestigationState
 from services.llm_factory import get_ai_mode
+from services.razorpay_mcp_client import mcp_status
+from agents.risk_monitoring_agent import run_risk_monitoring
 
 app = FastAPI(
     title="RefundShield AI Investigation Service",
-    description="LangGraph-powered Coordinated Refund Abuse Investigation Agent",
-    version="2.0.0"
+    description="LangGraph-powered Coordinated Refund Abuse Investigation Agent with Razorpay MCP Integration",
+    version="2.1.0"
 )
 
 class InvestigationRequest(BaseModel):
     customer_id: str
     case_id: Optional[str] = None
+    # Optional Razorpay identifiers — passed by frontend when available
+    payment_id: Optional[str] = None
+    order_id: Optional[str] = None
+    refund_id: Optional[str] = None
 
 class InvestigationResponse(BaseModel):
     caseId: str
@@ -40,15 +46,27 @@ class InvestigationResponse(BaseModel):
     scoreBreakdown: List[Dict[str, Any]]
     beforeAfterComparison: Dict[str, Any]
     executionSteps: List[Dict[str, Any]]
+    verificationResult: Optional[Dict[str, Any]] = None
+    evidencePackage: Optional[Dict[str, Any]] = None
     aiMode: str
+    razorpayContext: Optional[Dict[str, Any]] = None
+    mcpToolCalls: List[Dict[str, Any]] = []
 
 @app.get("/health")
 def health_check():
     return {
         "status": "ok",
-        "service": "RefundShield LangGraph AI Service",
+        "service": "RefundShield LangGraph AI Service v2.1",
         "aiMode": get_ai_mode()
     }
+
+@app.get("/api/ai/mcp/status")
+def get_mcp_status():
+    """
+    Health endpoint for Razorpay MCP + RefundShield MCP connectivity.
+    NEVER exposes API keys or secrets in the response.
+    """
+    return mcp_status()
 
 @app.post("/api/ai/investigate", response_model=InvestigationResponse)
 def run_investigation(req: InvestigationRequest):
@@ -75,12 +93,19 @@ def run_investigation(req: InvestigationRequest):
         "score_breakdown": [],
         "before_after_comparison": {},
         "ai_mode": get_ai_mode(),
-        "execution_steps": []
+        "execution_steps": [],
+        # Razorpay MCP — identifiers seeded from request (may all be None)
+        "razorpay_context": {
+            "payment_id": req.payment_id,
+            "order_id":   req.order_id,
+            "refund_id":  req.refund_id,
+        },
+        "mcp_tool_calls": [],
     }
 
     try:
         final_state = investigation_graph.invoke(initial_state)
-        
+
         return InvestigationResponse(
             caseId=final_state.get("case_id"),
             riskLevel=final_state.get("risk_level", "LOW"),
@@ -101,10 +126,24 @@ def run_investigation(req: InvestigationRequest):
             scoreBreakdown=final_state.get("score_breakdown", []),
             beforeAfterComparison=final_state.get("before_after_comparison", {}),
             executionSteps=final_state.get("execution_steps", []),
-            aiMode=final_state.get("ai_mode", get_ai_mode())
+            verificationResult=final_state.get("verification_result"),
+            evidencePackage=final_state.get("evidence_package"),
+            aiMode=final_state.get("ai_mode", get_ai_mode()),
+            razorpayContext=final_state.get("razorpay_context"),
+            mcpToolCalls=final_state.get("mcp_tool_calls", []),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LangGraph execution failed: {str(e)}")
+
+class MonitorRequest(BaseModel):
+    customer_id: str
+
+@app.post("/api/ai/monitor")
+def post_payment_monitor(req: MonitorRequest):
+    try:
+        return run_risk_monitoring(req.customer_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Risk monitoring failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

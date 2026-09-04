@@ -5,6 +5,7 @@ from tools.product_tools import get_common_products
 from tools.customer_tools import get_customer
 from services.llm_factory import get_llm, get_ai_mode
 from services.db_client import get_db
+from services.razorpay_mcp_client import get_customer_payment_context
 
 def investigation_node(state: InvestigationState) -> InvestigationState:
   """
@@ -98,6 +99,61 @@ def investigation_node(state: InvestigationState) -> InvestigationState:
 
   risk_score_after = min(100, risk_score_after)
 
+  # ── 6. Razorpay MCP Intelligence Call ──────────────────────────────────────
+  # Read any Razorpay identifiers seeded into the initial state
+  rzp_ctx_seed  = state.get("razorpay_context", {}) or {}
+  payment_id_v  = rzp_ctx_seed.get("payment_id")
+  order_id_v    = rzp_ctx_seed.get("order_id")
+  refund_id_v   = rzp_ctx_seed.get("refund_id")
+  razorpay_context  = rzp_ctx_seed          # preserve seed; will be replaced on success
+  existing_mcp_calls = list(state.get("mcp_tool_calls", []))
+
+  try:
+    rzp_data = get_customer_payment_context(
+        payment_id=payment_id_v,
+        order_id=order_id_v,
+        refund_id=refund_id_v,
+    )
+    razorpay_context = rzp_data
+
+    # Record every MCP tool call for the frontend Activity panel
+    for call in rzp_data.get("toolCalls", []):
+      existing_mcp_calls.append(call)
+
+    # Enrich evidence list with Razorpay-verified findings
+    if rzp_data.get("available"):
+      rzp_summary = rzp_data.get("summary", {})
+      if rzp_summary.get("failedPaymentCount", 0) > 0:
+        evidence_list.append({
+          "type": "RAZORPAY_FAILED_PAYMENTS",
+          "description": (
+            f"Razorpay MCP confirmed {rzp_summary['failedPaymentCount']} "
+            f"failed payment attempt(s) associated with this case. "
+            f"Source: Official Razorpay MCP"
+          ),
+          "sourceIds": ["razorpay-mcp"],
+          "source": "Razorpay MCP",
+        })
+      if rzp_summary.get("refundCount", 0) > 0:
+        evidence_list.append({
+          "type": "RAZORPAY_CONFIRMED_REFUNDS",
+          "description": (
+            f"Razorpay MCP verified {rzp_summary['refundCount']} refund(s) "
+            f"totalling \u20b9{rzp_summary.get('refundedAmount', 0):.2f}. "
+            f"Source: Official Razorpay MCP"
+          ),
+          "sourceIds": ["razorpay-mcp"],
+          "source": "Razorpay MCP",
+        })
+  except Exception:
+    # MCP failure must NEVER crash the LangGraph pipeline — degrade gracefully
+    existing_mcp_calls.append({
+      "server": "Razorpay MCP",
+      "tool": "get_customer_payment_context",
+      "status": "FAILED",
+      "purpose": "Razorpay MCP call failed; investigation continues with internal data.",
+    })
+
   before_after_comparison = {
     "before": {
       "riskScore": risk_before,
@@ -169,6 +225,9 @@ Return a concise 2-sentence summary.
   state["before_after_comparison"] = before_after_comparison
   state["ai_mode"] = ai_mode
   state["execution_steps"] = exec_steps
+  state["razorpay_context"] = razorpay_context
+  state["mcp_tool_calls"] = existing_mcp_calls
   state["investigation_status"] = "INVESTIGATION_COMPLETED"
 
   return state
+

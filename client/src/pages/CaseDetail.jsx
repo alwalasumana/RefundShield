@@ -4,13 +4,16 @@ import api from '../services/api';
 import RiskBadge from '../components/RiskBadge';
 import ActionBadge from '../components/ActionBadge';
 import RelationshipGraph from '../components/RelationshipGraph';
-import AIStepper from '../components/AIStepper';
 import Timeline from '../components/Timeline';
 import EvidenceList from '../components/EvidenceList';
 import RiskScoreBreakdown from '../components/RiskScoreBreakdown';
 import BeforeAfterComparison from '../components/BeforeAfterComparison';
 import NetworkSummaryCard from '../components/NetworkSummaryCard';
-import { Cpu, UserCheck, CheckCircle2, RefreshCw, Info, AlertTriangle, FileText, Printer, X } from 'lucide-react';
+import { 
+  Cpu, UserCheck, CheckCircle2, RefreshCw, Info, AlertTriangle, 
+  FileText, Printer, X, ShieldAlert, Zap, Database, ArrowRight, Activity,
+  Plug2, Wifi, WifiOff, ChevronRight
+} from 'lucide-react';
 
 export default function CaseDetail() {
   const { caseId, id } = useParams();
@@ -26,6 +29,8 @@ export default function CaseDetail() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState('');
   const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [globalLatency, setGlobalLatency] = useState({ average: 15.4, p95: 22.8 });
+  const [hasInvestigated, setHasInvestigated] = useState(false);
 
   async function loadCaseAndGraph() {
     setLoading(true);
@@ -39,6 +44,12 @@ export default function CaseDetail() {
       const targetCustId = caseRes.data.primaryCustomerId || targetId.replace('CASE-', '');
       const graphRes = await api.get(`/graph/${targetCustId}`);
       setGraphData(graphRes.data);
+
+      // Fetch global prepayment stats from dashboard/stats
+      const statsRes = await api.get('/dashboard/stats');
+      if (statsRes.data && statsRes.data.prepaymentLatency) {
+        setGlobalLatency(statsRes.data.prepaymentLatency);
+      }
     } catch (err) {
       console.warn('Case fetch error:', err.message);
       setCaseData(null);
@@ -59,11 +70,11 @@ export default function CaseDetail() {
 
     const interval = setInterval(() => {
       setActiveStep((prev) => {
-        if (prev < 2) return prev + 1;
+        if (prev < 4) return prev + 1;
         clearInterval(interval);
-        return 2;
+        return 4;
       });
-    }, 800);
+    }, 300);
 
     try {
       const targetCustId = caseData?.primaryCustomerId || targetId.replace('CASE-', '');
@@ -72,13 +83,15 @@ export default function CaseDetail() {
         setCaseData(res.data);
         setReviewStatus(res.data.status || reviewStatus);
         setReviewerNotes(res.data.reviewerNotes || reviewerNotes);
+        setHasInvestigated(true);
       }
     } catch (err) {
       console.warn('AI Investigation proxy call fallback:', err.message);
     } finally {
+      clearInterval(interval);
       setTimeout(() => {
         setInvestigating(false);
-      }, 2600);
+      }, 1000);
     }
   };
 
@@ -112,6 +125,18 @@ export default function CaseDetail() {
     );
   }
 
+  // Calculate execution steps for UI stepper
+  const stepsConfig = [
+    { node: 'DetectionNode', title: 'Detection Agent', desc: 'Finding connected accounts and relationships' },
+    { node: 'InvestigationNode', title: 'Investigation Agent', desc: 'Analyzing refund and transaction patterns' },
+    { node: 'VerificationNode', title: 'Verification Agent', desc: 'Automatically verifying suspicious evidence' },
+    { node: 'EvidenceNode', title: 'Evidence Agent', desc: 'Collecting and preparing supporting evidence' },
+    { node: 'DecisionNode', title: 'Decision Agent', desc: 'Generating final risk assessment' }
+  ];
+
+  // AI timing values
+  const aiDurationTotal = (caseData?.executionSteps || []).reduce((acc, step) => acc + (step.duration_ms || 0), 0);
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header Bar */}
@@ -136,7 +161,49 @@ export default function CaseDetail() {
         </button>
       </div>
 
-      {investigating && <AIStepper activeStep={activeStep} />}
+      {/* AI Stepper Panel */}
+      <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">AI Investigation Agent Stepper</h3>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          {stepsConfig.map((step, idx) => {
+            const stepRecord = (caseData?.executionSteps || []).find(s => s.node === step.node);
+            const isDone = stepRecord || (investigating && idx < activeStep);
+            const isCurrent = investigating && idx === activeStep;
+            
+            return (
+              <div 
+                key={idx}
+                className={`p-3 rounded-lg border flex flex-col justify-between transition-all ${
+                  isDone 
+                    ? 'bg-blue-950/20 border-blue-500/30 text-blue-300'
+                    : isCurrent
+                    ? 'bg-slate-800 border-blue-500 text-slate-100 ring-2 ring-blue-500/20 animate-pulse'
+                    : 'bg-slate-950/50 border-slate-850 text-slate-500'
+                }`}
+              >
+                <div>
+                  <div className="text-xs font-bold">{step.title}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{step.desc}</div>
+                </div>
+                {isDone && (
+                  <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between items-center text-[10px] font-mono">
+                    <span className="text-blue-400 font-semibold">COMPLETED</span>
+                  </div>
+                )}
+                {isCurrent && (
+                  <div className="mt-2 pt-2 border-t border-slate-800 text-[10px] font-mono text-amber-400 font-bold animate-pulse">
+                    RUNNING...
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+
+      {/* Investigation Results — only shown after clicking Investigate with AI */}
+      {hasInvestigated && <>
 
       {/* Recommended Action & AI Executive Summary */}
       <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-xl">
@@ -175,6 +242,10 @@ export default function CaseDetail() {
         )}
       </div>
 
+
+
+
+
       {/* Network Summary Card */}
       <NetworkSummaryCard summary={caseData?.networkSummary} />
 
@@ -192,42 +263,21 @@ export default function CaseDetail() {
         <RelationshipGraph initialNodes={graphData.nodes} initialEdges={graphData.edges} />
       </div>
 
-      {/* Before vs After & Risk Explainability Breakdown */}
+      {/* Risk Explainability Breakdown */}
+      <RiskScoreBreakdown breakdown={caseData?.scoreBreakdown} totalScore={caseData?.riskScore} />
+
+      </>}
+
+      {/* Two Column Layout: Event Timeline (Left) & Investigator Action Form (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <BeforeAfterComparison data={caseData?.beforeAfterComparison} />
-        <RiskScoreBreakdown breakdown={caseData?.scoreBreakdown} totalScore={caseData?.riskScore} />
-      </div>
-
-      {/* Legitimate Shared-Entity Control Callout */}
-      <div className="bg-slate-900/80 border border-blue-500/30 p-5 rounded-2xl flex items-start gap-3 text-xs text-slate-300">
-        <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
-          <Info className="w-5 h-5" />
+        {/* Left Column: Timeline */}
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-xl">
+          <h2 className="text-sm font-bold text-slate-200">Chronological Event Timeline</h2>
+          <Timeline events={caseData?.timeline || []} />
         </div>
-        <div className="space-y-1">
-          <div className="font-bold text-slate-100 text-sm">False Positive Prevention Control</div>
-          <p className="text-slate-400">
-            Legitimate family members or roommates sharing a device or home address are correctly classified as <strong className="text-blue-400">LOW RISK</strong> because infrastructure signals are only weighted heavily when backed by active refund abuse claims.
-          </p>
-        </div>
-      </div>
 
-      {/* Two Column Layout: Evidence & Reasoning vs Timeline & Review */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column: Evidence & Signals */}
+        {/* Right Column: Human Investigator Review Form */}
         <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-xl">
-            <h2 className="text-sm font-bold text-slate-200">Identified Evidence & Risk Vectors</h2>
-            <EvidenceList evidence={caseData?.evidence || caseData?.signals || []} />
-          </div>
-        </div>
-
-        {/* Right Column: Timeline & Human Investigator Review Form */}
-        <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-xl">
-            <h2 className="text-sm font-bold text-slate-200">Chronological Event Timeline</h2>
-            <Timeline events={caseData?.timeline || []} />
-          </div>
-
           {/* Investigator Review Workflow */}
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-xl">
             <div className="flex items-center gap-2">
@@ -342,6 +392,14 @@ export default function CaseDetail() {
                 </div>
               </div>
 
+              {/* Case summary from evidence agent */}
+              {caseData?.evidencePackage?.caseSummary && (
+                <div className="space-y-1 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                  <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-wider font-sans">AI Evidence Summary Case Statement</h4>
+                  <p className="text-[11px] font-sans leading-relaxed text-slate-700">{caseData.evidencePackage.caseSummary}</p>
+                </div>
+              )}
+
               {/* Linkage Statement */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1 font-sans">1. Executive Summary & Graph Linkage Certification</h3>
@@ -353,9 +411,21 @@ export default function CaseDetail() {
                 </p>
               </div>
 
+              {/* Transaction evidence list */}
+              {caseData?.evidencePackage?.transactionEvidence && caseData.evidencePackage.transactionEvidence.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1 font-sans">2. Transaction History Evidence</h3>
+                  <ul className="list-disc pl-5 text-[11px] font-mono text-slate-700 space-y-1">
+                    {caseData.evidencePackage.transactionEvidence.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Linkage Table */}
               <div className="space-y-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1 font-sans">2. Graph Connection Audit Trail</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1 font-sans">3. Graph Connection Audit Trail</h3>
                 <table className="w-full text-left text-[11px] font-sans border-collapse">
                   <thead>
                     <tr className="border-b border-slate-350 bg-slate-100 text-slate-700">
@@ -382,9 +452,21 @@ export default function CaseDetail() {
               </div>
 
               {/* Hardware Device Auditing */}
-              {caseData?.deviceIds && caseData.deviceIds.length > 0 && (
+              {caseData?.evidencePackage?.relationshipEvidence && caseData.evidencePackage.relationshipEvidence.length > 0 ? (
                 <div className="space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1 font-sans">3. Hardware Device Fingerprint Link</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1 font-sans">4. Hardware Device & Location Linkage Details</h3>
+                  <p className="text-xs leading-relaxed">
+                    The linked accounts have initiated transactions and refund requests from identical browser signatures and hardware footprints:
+                  </p>
+                  <ul className="list-disc pl-5 text-[11px] font-mono text-slate-700 space-y-1">
+                    {caseData.evidencePackage.relationshipEvidence.map((link, idx) => (
+                      <li key={idx}>{link}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : caseData?.deviceIds && caseData.deviceIds.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1 font-sans">4. Hardware Device Fingerprint Link</h3>
                   <p className="text-xs leading-relaxed">
                     The linked accounts have initiated transactions and refund requests from identical browser signatures and hardware footprints:
                   </p>
